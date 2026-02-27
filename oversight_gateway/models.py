@@ -24,7 +24,7 @@ class Action(Base):
     session_id = Column(String, nullable=False, index=True)
     action = Column(String, nullable=False)
     target = Column(String, nullable=True)
-    metadata = Column(JSON, nullable=True)
+    action_metadata = Column(JSON, nullable=True)
     
     # Risk scoring
     impact = Column(Float, nullable=False)
@@ -58,7 +58,7 @@ class NearMiss(Base):
     target = Column(String, nullable=True)
     near_miss_type = Column(String, nullable=False)
     description = Column(String, nullable=True)
-    metadata = Column(JSON, nullable=True)
+    near_miss_metadata = Column(JSON, nullable=True)
     
     # Original risk vs actual risk
     original_risk = Column(Float, nullable=True)

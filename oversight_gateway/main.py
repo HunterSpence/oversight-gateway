@@ -75,7 +75,7 @@ async def evaluate_action(
         session_id=request.session_id,
         action=request.action,
         target=request.target,
-        metadata=request.metadata,
+        action_metadata=request.metadata,
         impact=impact,
         breadth=breadth,
         probability=probability,

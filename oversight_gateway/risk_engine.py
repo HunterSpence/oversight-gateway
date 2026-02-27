@@ -260,7 +260,7 @@ class RiskEngine:
             target=target,
             near_miss_type=near_miss_type,
             description=description,
-            metadata=metadata,
+            near_miss_metadata=metadata,
             original_risk=original_risk,
             actual_severity=actual_severity,
         )
