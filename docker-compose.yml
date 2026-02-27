@@ -1,0 +1,24 @@
+version: '3.8'
+
+services:
+  oversight-gateway:
+    build: .
+    image: oversight-gateway:latest
+    container_name: oversight-gateway
+    ports:
+      - "8001:8001"
+    volumes:
+      - oversight-data:/app/data
+    environment:
+      - DATABASE_URL=sqlite:///./data/oversight_gateway.db
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "python", "-c", "import httpx; httpx.get('http://localhost:8001/health').raise_for_status()"]
+      interval: 30s
+      timeout: 3s
+      retries: 3
+      start_period: 5s
+
+volumes:
+  oversight-data:
+    driver: local
