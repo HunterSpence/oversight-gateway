@@ -3,22 +3,35 @@ version: '3.8'
 services:
   oversight-gateway:
     build: .
-    image: oversight-gateway:latest
-    container_name: oversight-gateway
     ports:
       - "8001:8001"
-    volumes:
-      - oversight-data:/app/data
     environment:
-      - DATABASE_URL=sqlite:///./data/oversight_gateway.db
+      - DATABASE_URL=sqlite+aiosqlite:///data/oversight_gateway.db
+      - SERVICE_NAME=oversight-gateway
+      - OTLP_ENDPOINT=${OTLP_ENDPOINT:-}
+      - API_KEY_DEV=dev-key-12345
+    volumes:
+      - ./data:/data
+      - ./policies:/app/policies
     restart: unless-stopped
     healthcheck:
-      test: ["CMD", "python", "-c", "import httpx; httpx.get('http://localhost:8001/health').raise_for_status()"]
+      test: ["CMD", "python", "-c", "import httpx; httpx.get('http://localhost:8001/health')"]
       interval: 30s
-      timeout: 3s
+      timeout: 10s
       retries: 3
-      start_period: 5s
+      start_period: 10s
+
+  # Optional: Jaeger for tracing
+  jaeger:
+    image: jaegertracing/all-in-one:latest
+    ports:
+      - "16686:16686"  # Jaeger UI
+      - "4317:4317"    # OTLP gRPC
+      - "4318:4318"    # OTLP HTTP
+    environment:
+      - COLLECTOR_OTLP_ENABLED=true
+    profiles:
+      - observability
 
 volumes:
-  oversight-data:
-    driver: local
+  data:

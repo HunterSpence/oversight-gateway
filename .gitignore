@@ -19,16 +19,19 @@ wheels/
 *.egg-info/
 .installed.cfg
 *.egg
+MANIFEST
 
 # Virtual environments
 venv/
 env/
 ENV/
+.venv
 
 # Database
 *.db
 *.sqlite
 *.sqlite3
+oversight_gateway.db
 
 # IDE
 .vscode/
@@ -37,19 +40,26 @@ ENV/
 *.swo
 *~
 
+# Testing
+.pytest_cache/
+.coverage
+htmlcov/
+.tox/
+
+# Logs
+*.log
+logs/
+
+# Environment
+.env
+.env.local
+
+# Docker
+data/
+
 # OS
 .DS_Store
 Thumbs.db
 
-# Environment variables
-.env
-.env.local
-
-# Logs
-*.log
-
-# Docker
-docker-compose.override.yml
-
-# Data
-data/
+# Distribution
+requirements.txt

@@ -1,10 +1,12 @@
-"""Oversight Gateway SDK - Python client for the Oversight Gateway API"""
-import time
-from typing import Optional, Dict, Any
-import httpx
+"""Oversight Gateway SDK V2 - Async Python client with WebSocket support"""
+import asyncio
+from typing import Optional, Dict, Any, AsyncGenerator
 from dataclasses import dataclass
+import httpx
+import websockets
+import json
 
-__version__ = "0.1.0"
+__version__ = "2.0.0"
 
 
 @dataclass
@@ -28,27 +30,29 @@ class EvaluationResult:
         return self.needs_checkpoint
 
 
-class OversightClient:
-    """Client for interacting with Oversight Gateway"""
+# Async SDK
+
+class AsyncOversightClient:
+    """Async client for interacting with Oversight Gateway"""
     
     def __init__(self, base_url: str, api_key: str, timeout: float = 30.0):
         """
-        Initialize Oversight Gateway client.
+        Initialize async Oversight Gateway client.
         
         Args:
-            base_url: Base URL of the Oversight Gateway service (e.g., "http://localhost:8001")
+            base_url: Base URL of the Oversight Gateway service
             api_key: API key for authentication
             timeout: Request timeout in seconds
         """
         self.base_url = base_url.rstrip("/")
         self.api_key = api_key
         self.timeout = timeout
-        self._client = httpx.Client(
+        self._client = httpx.AsyncClient(
             headers={"X-API-Key": api_key},
             timeout=timeout
         )
     
-    def evaluate(
+    async def evaluate(
         self,
         action: str,
         session_id: str = "default",
@@ -61,16 +65,13 @@ class OversightClient:
         Args:
             action: Action description (e.g., "send_email")
             session_id: Session identifier (default: "default")
-            target: Target of the action (e.g., email address)
+            target: Target of the action
             metadata: Additional metadata for risk scoring
             
         Returns:
             EvaluationResult with risk score and checkpoint decision
-            
-        Raises:
-            httpx.HTTPError: If the API request fails
         """
-        response = self._client.post(
+        response = await self._client.post(
             f"{self.base_url}/evaluate",
             json={
                 "session_id": session_id,
@@ -96,7 +97,13 @@ class OversightClient:
             compound_count=data["compound_count"],
         )
     
-    def approve(self, action_id: int, approved: bool, notes: Optional[str] = None) -> Dict[str, Any]:
+    async def approve(
+        self,
+        action_id: int,
+        approved: bool,
+        notes: Optional[str] = None,
+        channel: str = "rest"
+    ) -> Dict[str, Any]:
         """
         Record approval decision for a checkpointed action.
         
@@ -104,59 +111,24 @@ class OversightClient:
             action_id: ID of the action from evaluate()
             approved: True to approve, False to reject
             notes: Optional notes about the decision
+            channel: Approval channel identifier
             
         Returns:
             Response with approval status
         """
-        response = self._client.post(
+        response = await self._client.post(
             f"{self.base_url}/approve",
             json={
                 "action_id": action_id,
                 "approved": approved,
-                "notes": notes
+                "notes": notes,
+                "channel": channel
             }
         )
         response.raise_for_status()
         return response.json()
     
-    def wait_for_approval(
-        self,
-        action_id: int,
-        poll_interval: float = 2.0,
-        timeout: float = 300.0
-    ) -> bool:
-        """
-        Wait for human approval of a checkpointed action.
-        
-        This is a blocking call that polls the API until the action is approved or rejected.
-        In production, you'd typically use webhooks or a message queue instead.
-        
-        Args:
-            action_id: ID of the action to wait for
-            poll_interval: Seconds between poll attempts
-            timeout: Maximum seconds to wait
-            
-        Returns:
-            True if approved, False if rejected
-            
-        Raises:
-            TimeoutError: If approval not received within timeout
-        """
-        # Note: This is a simplified implementation. In production, you'd implement
-        # a proper approval workflow endpoint that supports long-polling or websockets.
-        print(f"⏳ Waiting for approval of action {action_id}...")
-        print(f"   Please call client.approve({action_id}, approved=True/False)")
-        
-        start_time = time.time()
-        while time.time() - start_time < timeout:
-            time.sleep(poll_interval)
-            # In a real implementation, this would poll an endpoint
-            # For now, this is a placeholder
-            print("   Still waiting...")
-        
-        raise TimeoutError(f"Approval timeout after {timeout}s")
-    
-    def record_near_miss(
+    async def record_near_miss(
         self,
         action: str,
         near_miss_type: str,
@@ -167,23 +139,8 @@ class OversightClient:
         metadata: Optional[Dict[str, Any]] = None,
         original_risk: Optional[float] = None
     ) -> Dict[str, Any]:
-        """
-        Record a near-miss event.
-        
-        Args:
-            action: Action that caused the near-miss
-            near_miss_type: Type of near-miss (boundary_violation, resource_overuse, etc.)
-            actual_severity: Severity of the near-miss (0.0-1.0)
-            session_id: Session identifier
-            target: Target of the action
-            description: Description of what happened
-            metadata: Additional metadata
-            original_risk: Original risk score if available
-            
-        Returns:
-            Response with near-miss ID
-        """
-        response = self._client.post(
+        """Record a near-miss event"""
+        response = await self._client.post(
             f"{self.base_url}/near-miss",
             json={
                 "session_id": session_id,
@@ -199,30 +156,192 @@ class OversightClient:
         response.raise_for_status()
         return response.json()
     
-    def get_budget(self, session_id: str = "default") -> Dict[str, Any]:
+    async def get_budget(self, session_id: str = "default") -> Dict[str, Any]:
         """Get remaining risk budget for a session"""
-        response = self._client.get(f"{self.base_url}/budget/{session_id}")
+        response = await self._client.get(f"{self.base_url}/budget/{session_id}")
         response.raise_for_status()
         return response.json()
+    
+    async def get_stats(self) -> Dict[str, Any]:
+        """Get system statistics"""
+        response = await self._client.get(f"{self.base_url}/stats")
+        response.raise_for_status()
+        return response.json()
+    
+    async def health_check(self) -> Dict[str, str]:
+        """Check if the service is healthy"""
+        response = await self._client.get(f"{self.base_url}/health")
+        response.raise_for_status()
+        return response.json()
+    
+    async def register_webhook(
+        self,
+        url: str,
+        events: list,
+        secret: Optional[str] = None
+    ) -> Dict[str, Any]:
+        """Register a webhook for event notifications"""
+        response = await self._client.post(
+            f"{self.base_url}/config/webhooks",
+            json={
+                "url": url,
+                "events": events,
+                "secret": secret
+            }
+        )
+        response.raise_for_status()
+        return response.json()
+    
+    async def export_audit_log(
+        self,
+        from_date: Optional[str] = None,
+        to_date: Optional[str] = None
+    ) -> Dict[str, Any]:
+        """Export audit log"""
+        params = {}
+        if from_date:
+            params["from_date"] = from_date
+        if to_date:
+            params["to_date"] = to_date
+        
+        response = await self._client.get(
+            f"{self.base_url}/audit/export",
+            params=params
+        )
+        response.raise_for_status()
+        return response.json()
+    
+    async def close(self):
+        """Close the HTTP client"""
+        await self._client.aclose()
+    
+    async def __aenter__(self):
+        return self
+    
+    async def __aexit__(self, *args):
+        await self.close()
+
+
+class DashboardClient:
+    """WebSocket client for real-time dashboard"""
+    
+    def __init__(self, ws_url: str):
+        """
+        Initialize dashboard WebSocket client.
+        
+        Args:
+            ws_url: WebSocket URL (e.g., "ws://localhost:8001/ws/dashboard")
+        """
+        self.ws_url = ws_url
+        self._websocket = None
+    
+    async def connect(self):
+        """Connect to dashboard WebSocket"""
+        self._websocket = await websockets.connect(self.ws_url)
+    
+    async def listen(self) -> AsyncGenerator[Dict[str, Any], None]:
+        """
+        Listen for events from the dashboard.
+        
+        Yields:
+            Event messages as dictionaries
+        """
+        if not self._websocket:
+            raise RuntimeError("Not connected. Call connect() first.")
+        
+        async for message in self._websocket:
+            yield json.loads(message)
+    
+    async def close(self):
+        """Close WebSocket connection"""
+        if self._websocket:
+            await self._websocket.close()
+    
+    async def __aenter__(self):
+        await self.connect()
+        return self
+    
+    async def __aexit__(self, *args):
+        await self.close()
+
+
+# Sync wrapper for backward compatibility
+
+class OversightClient:
+    """Synchronous wrapper around AsyncOversightClient"""
+    
+    def __init__(self, base_url: str, api_key: str, timeout: float = 30.0):
+        self._async_client = AsyncOversightClient(base_url, api_key, timeout)
+    
+    def evaluate(
+        self,
+        action: str,
+        session_id: str = "default",
+        target: Optional[str] = None,
+        metadata: Optional[Dict[str, Any]] = None
+    ) -> EvaluationResult:
+        """Synchronous evaluate"""
+        return asyncio.run(
+            self._async_client.evaluate(action, session_id, target, metadata)
+        )
+    
+    def approve(
+        self,
+        action_id: int,
+        approved: bool,
+        notes: Optional[str] = None,
+        channel: str = "rest"
+    ) -> Dict[str, Any]:
+        """Synchronous approve"""
+        return asyncio.run(
+            self._async_client.approve(action_id, approved, notes, channel)
+        )
+    
+    def record_near_miss(
+        self,
+        action: str,
+        near_miss_type: str,
+        actual_severity: float,
+        session_id: str = "default",
+        target: Optional[str] = None,
+        description: Optional[str] = None,
+        metadata: Optional[Dict[str, Any]] = None,
+        original_risk: Optional[float] = None
+    ) -> Dict[str, Any]:
+        """Synchronous record_near_miss"""
+        return asyncio.run(
+            self._async_client.record_near_miss(
+                action, near_miss_type, actual_severity, session_id,
+                target, description, metadata, original_risk
+            )
+        )
+    
+    def get_budget(self, session_id: str = "default") -> Dict[str, Any]:
+        """Synchronous get_budget"""
+        return asyncio.run(self._async_client.get_budget(session_id))
     
     def get_stats(self) -> Dict[str, Any]:
-        """Get system statistics"""
-        response = self._client.get(f"{self.base_url}/stats")
-        response.raise_for_status()
-        return response.json()
+        """Synchronous get_stats"""
+        return asyncio.run(self._async_client.get_stats())
     
     def health_check(self) -> Dict[str, str]:
-        """Check if the service is healthy"""
-        response = self._client.get(f"{self.base_url}/health")
-        response.raise_for_status()
-        return response.json()
+        """Synchronous health_check"""
+        return asyncio.run(self._async_client.health_check())
     
     def close(self):
-        """Close the HTTP client"""
-        self._client.close()
+        """Close the client"""
+        asyncio.run(self._async_client.close())
     
     def __enter__(self):
         return self
     
     def __exit__(self, *args):
         self.close()
+
+
+__all__ = [
+    "AsyncOversightClient",
+    "OversightClient",
+    "DashboardClient",
+    "EvaluationResult",
+]

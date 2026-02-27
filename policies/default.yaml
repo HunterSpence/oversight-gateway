@@ -1,0 +1,122 @@
+# Default Risk Policy Configuration
+# This policy is loaded at startup and can be updated via API
+
+# Risk thresholds
+risk_thresholds:
+  # Trigger checkpoint when single action risk exceeds this
+  checkpoint_trigger: 0.6
+  # Maximum cumulative risk budget per session
+  session_budget: 0.8
+
+# Action-specific rules
+action_rules:
+  # Delete operations
+  - pattern: "delete_*"
+    impact_floor: 0.8
+    always_checkpoint: true
+    description: "Deletion operations are high-impact and require approval"
+  
+  - pattern: "drop_*"
+    impact_floor: 0.8
+    always_checkpoint: true
+    description: "Drop operations are destructive"
+  
+  - pattern: "remove_*"
+    impact_floor: 0.7
+    always_checkpoint: false
+    description: "Removal operations have high base impact"
+  
+  # Communication actions
+  - pattern: "send_email"
+    impact_floor: 0.5
+    always_checkpoint: false
+    metadata_boosts:
+      contains_pii: 0.3
+      recipients_over_10: 0.2
+      recipients_over_100: 0.4
+    description: "Email sending varies by recipient count and PII"
+  
+  - pattern: "send_message"
+    impact_floor: 0.4
+    metadata_boosts:
+      contains_pii: 0.3
+      broadcast: 0.5
+    description: "Messaging impact varies by scope"
+  
+  - pattern: "post_*"
+    impact_floor: 0.5
+    metadata_boosts:
+      public: 0.3
+      contains_pii: 0.4
+    description: "Public posts have higher impact"
+  
+  - pattern: "publish_*"
+    impact_floor: 0.6
+    always_checkpoint: false
+    metadata_boosts:
+      public: 0.3
+    description: "Publishing actions are medium-high impact"
+  
+  # Financial operations
+  - pattern: "process_payment"
+    impact_floor: 0.7
+    always_checkpoint: false
+    metadata_boosts:
+      amount_over_1000: 0.2
+      amount_over_10000: 0.4
+      automated: 0.2
+    description: "Financial transactions scale with amount"
+  
+  - pattern: "transfer_*"
+    impact_floor: 0.7
+    always_checkpoint: true
+    description: "Money transfers always require approval"
+  
+  - pattern: "charge_*"
+    impact_floor: 0.7
+    metadata_boosts:
+      amount_over_1000: 0.2
+    description: "Charging operations are high-impact"
+  
+  # System operations
+  - pattern: "terminate_*"
+    impact_floor: 0.9
+    always_checkpoint: true
+    description: "Termination operations are destructive"
+  
+  - pattern: "shutdown_*"
+    impact_floor: 0.9
+    always_checkpoint: true
+    description: "Shutdown operations are critical"
+  
+  - pattern: "restart_*"
+    impact_floor: 0.6
+    always_checkpoint: false
+    description: "Restart operations have service impact"
+
+# Compound action detection
+compound_detection:
+  # Time window in seconds for detecting compound actions
+  time_window_seconds: 300
+  # Risk boost per additional action on same target
+  same_resource_boost: 0.2
+  # Minimum count to trigger compound detection
+  min_count: 2
+
+# Near-miss learning
+near_miss:
+  # Half-life for near-miss decay in hours
+  half_life_hours: 24.0
+  # Maximum multiplier from near-miss learning
+  max_multiplier: 2.0
+  # Minimum severity to record (0.0-1.0)
+  min_severity: 0.1
+
+# Approval settings
+approval:
+  # Default timeout in seconds for auto-approval (0 = no auto-approval)
+  auto_approve_timeout: 0
+  # Require approval notes
+  require_notes: false
+  # Maximum pending approvals per session
+  max_pending_per_session: 10

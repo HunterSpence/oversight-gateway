@@ -1,0 +1,69 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "oversight-gateway"
+version = "2.0.0"
+description = "AI Agent Oversight Checkpoint System with async engine, policy-as-code, and real-time monitoring"
+authors = [
+    {name = "Hunter Spence", email = "hspence21190@gmail.com"},
+]
+readme = "README.md"
+license = {text = "Proprietary"}
+requires-python = ">=3.11"
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Framework :: FastAPI",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+]
+
+dependencies = [
+    "fastapi>=0.115.0",
+    "uvicorn[standard]>=0.32.0",
+    "sqlalchemy[asyncio]>=2.0.36",
+    "aiosqlite>=0.20.0",
+    "pydantic>=2.10.0",
+    "pyyaml>=6.0.2",
+    "httpx>=0.28.0",
+    "websockets>=13.0",
+    "opentelemetry-api>=1.29.0",
+    "opentelemetry-sdk>=1.29.0",
+    "opentelemetry-instrumentation-fastapi>=0.50b0",
+    "opentelemetry-exporter-otlp>=1.29.0",
+    "structlog>=24.4.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0.0",
+    "pytest-asyncio>=0.23.0",
+    "pytest-cov>=4.1.0",
+    "black>=24.0.0",
+    "ruff>=0.1.0",
+]
+
+langchain = [
+    "langchain>=0.1.0",
+    "langchain-core>=0.1.0",
+]
+
+[project.urls]
+Homepage = "https://github.com/hunterspence/oversight-gateway"
+Documentation = "https://github.com/hunterspence/oversight-gateway#readme"
+
+[tool.hatch.build.targets.wheel]
+packages = ["oversight_gateway", "oversight_gateway_sdk"]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]
+
+[tool.black]
+line-length = 100
+target-version = ["py311"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
